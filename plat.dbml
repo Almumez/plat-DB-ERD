@@ -180,6 +180,8 @@ Table vehicle_movements {
 Table contracts {
   contract_id             int         [pk, increment]
   contract_number         varchar(50) [unique, not null]
+  contract_status     enum('open', 'closed', 'cancelled', 'debt', 'lease_to_own') [default: 'open'] // حالة العقد
+  contract_category   enum('individual', 'corporate') [default: 'individual'] // تصنيف العقد: فردي أو شركة
 
   client_id               int         [ref: > clients.client_id, not null]
   vehicle_id              int         [ref: > vehicles.vehicle_id, not null]
@@ -263,4 +265,109 @@ Table audit_logs {
   created_at      datetime     [default: `CURRENT_TIMESTAMP`]
 }
 
+
+Table transactions {
+  transaction_id         int         [pk, increment]
+  voucher_number         varchar(50) [unique, not null]  // رقم السند
+  branch_sequence_number int         // تسلسل السند حسب الفرع
+  branch_id              int [ref: > branches.branch_id]
+  branch_name_snapshot   varchar(100) // لعرض الاسم حتى لو تغير
+
+  transaction_datetime   datetime    [not null]  // تاريخ/وقت العملية
+  transaction_type       enum('receipt', 'payment') [not null]  // قبض / صرف
+  operation_category     varchar(50) // نوع العملية: "عقد"، "مصاريف"، "تجديد"، ...
+  operation_type         varchar(50) // الإجراء المحدد
+  contract_id            int [ref: > contracts.contract_id]
+  paper_contract_number  varchar(50) // العقد الورقي (من نسخة مطبوعة)
+
+  description            text  // البيان
+  payment_method_id      int [ref: > payment_methods.method_id]
+  from_account           varchar(100) // من حساب (محاسبي)
+
+  amount                 decimal(10,2) [not null]
+  amount_text            varchar(255)
+
+  client_id              int [ref: > clients.client_id]
+  supplier_name          varchar(100) // اسم المورد (في حالة المصاريف)
+  tax_number             varchar(50)  // الرقم الضريبي
+  cost_center            varchar(50)  // مركز التكلفة (مستقبلي)
+
+  approved_by_id         int [ref: > users.user_id] // معتمد
+  created_by             int [ref: > users.user_id]
+  created_at             datetime [default: `CURRENT_TIMESTAMP`]
+  updated_by             int [ref: > users.user_id]
+  updated_at             datetime [default: `CURRENT_TIMESTAMP`]
+
+  device_info            varchar(255)
+
+  from_account_id   int [ref: > accounts.account_id]
+  to_account_id     int [ref: > accounts.account_id]
+
+
+  indexes {
+    (voucher_number)
+    (transaction_datetime)
+    (branch_id, branch_sequence_number) [unique]
+  }
+}
+
+
+Table shift_handovers {
+  handover_id       int [pk, increment]
+  from_user_id      int [ref: > users.user_id]
+  to_user_id        int [ref: > users.user_id]
+  cash_amount       decimal(10,2)
+  network_receipts  decimal(10,2)
+  handover_time     datetime [default: `CURRENT_TIMESTAMP`]
+  created_by        int [ref: > users.user_id]
+}
+
+
+Table administrative_expenses {
+  expense_id        int [pk, increment]
+  transaction_id    int [ref: > transactions.transaction_id]
+  category          varchar(100)
+  description       text
+  created_at        datetime [default: `CURRENT_TIMESTAMP`]
+}
+
+
+Table vouchers {
+  voucher_id       int         [pk, increment]
+  voucher_type     enum('receipt', 'payment') [not null] // قبض / صرف
+  voucher_number   varchar(50) [unique, not null] // رقم السند
+  contract_id      int         [ref: > contracts.contract_id] // اختياري (مرتبط بعقد)
+  client_id        int         [ref: > clients.client_id] // في حالة القبض
+  branch_id        int         [ref: > branches.branch_id, not null] // الفرع الذي أصدر السند
+  payment_method_id int        [ref: > payment_methods.method_id] // طريقة الدفع (نقدًا، بطاقة، تحويل...)
+
+  amount           decimal(10,2) [not null] // القيمة
+  currency         varchar(10)  [default: 'SAR'] // العملة
+  exchange_rate    decimal(10,4) // في حالة الدفع بعملة أجنبية
+
+  notes            text
+  created_by       int         [ref: > users.user_id, not null]
+  created_at       datetime    [default: `CURRENT_TIMESTAMP`]
+  updated_at       datetime    [default: `CURRENT_TIMESTAMP`]
+
+  indexes {
+    (voucher_number)
+    (contract_id)
+    (client_id)
+    (branch_id)
+  }
+}
+
+
+
+Table accounts {
+  account_id         int         [pk, increment]
+  account_code       varchar(20) [unique, not null] // مثال: 1010
+  account_name       varchar(100) [not null]
+  account_type       enum('system', 'client', 'user') [not null] // لتحديد نوع الحساب
+  related_client_id  int [ref: > clients.client_id]
+  related_user_id    int [ref: > users.user_id]
+  is_active          boolean     [default: true]
+  created_at         datetime    [default: `CURRENT_TIMESTAMP`]
+}
 
